@@ -30,6 +30,9 @@ def load_txt(gt_path):
         gt = f.readlines()
     prompts = {}
     for fid, line in enumerate(gt):
+        line = line.strip()
+        if len(line) == 0:
+            continue
         x, y, w, h = map(float, line.split(','))
         x, y, w, h = int(x), int(y), int(w), int(h)
         prompts[fid] = ((x, y, x + w, y + h), 0)
