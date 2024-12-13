@@ -144,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", default="sam2/checkpoints/sam2.1_hiera_base_plus.pt", help="Path to the model checkpoint.")
     parser.add_argument("--video_output_path", default="demo.mp4", help="Path to save the output video.")
     parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
-    parser.add_argument("--mask-dir", help="If provided, save mask images to the given directory")
+    parser.add_argument("--mask_dir", help="If provided, save mask images to the given directory")
     parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
     main(args)
