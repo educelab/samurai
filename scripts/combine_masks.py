@@ -14,7 +14,12 @@ def get_mask_num(mask, return_as_int):
         return int(mask_num)
     return mask_num
 
-def main(args):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input_dir", required=True, help="Input directory of masks.")
+    parser.add_argument("--output_dir", required=True, help="Output directory for combined masks.")
+    parser.add_argument("--init_frames", required=True, help="Directory of the images the masks were generated from.")
+    args = parser.parse_args()
     input_dir = args.input_dir
     output_dir = args.output_dir
     frames = args.init_frames
@@ -52,10 +57,5 @@ def main(args):
         
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", required=True, help="Input directory of masks.")
-    parser.add_argument("--output_dir", required=True, help="Output directory for combined masks.")
-    parser.add_argument("--init_frames", required=True, help="Directory of the images the masks were generated from.")
-    args = parser.parse_args()
-    main(args)
+    main()
 
