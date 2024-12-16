@@ -448,7 +448,7 @@ class SAM2Base(torch.nn.Module):
                     y_min, x_min = non_zero_indices.min(dim=0).values
                     y_max, x_max = non_zero_indices.max(dim=0).values
                     high_res_bbox = [x_min.item(), y_min.item(), x_max.item(), y_max.item()]
-                if ious[0][best_iou_inds] > self.stable_ious_threshold:
+                if ious[0][best_iou_inds].mean() > self.stable_ious_threshold:
                     self.kf_mean, self.kf_covariance = self.kf.update(self.kf_mean, self.kf_covariance, self.kf.xyxy_to_xyah(high_res_bbox))
                     self.stable_frames += 1
                 else:
@@ -492,10 +492,10 @@ class SAM2Base(torch.nn.Module):
                     }
                 self.frame_cnt += 1
 
-                if ious[0][best_iou_inds] < self.stable_ious_threshold:
+                if ious[0][best_iou_inds].mean() < self.stable_ious_threshold:
                     self.stable_frames = 0
                 else:
-                    self.kf_mean, self.kf_covariance = self.kf.update(self.kf_mean, self.kf_covariance, self.kf.xyxy_to_xyah(high_res_multibboxes[best_iou_inds]))
+                    self.kf_mean, self.kf_covariance = self.kf.update(self.kf_mean, self.kf_covariance, self.kf.xyxy_to_xyah(high_res_multibboxes[best_iou_inds[0]]))
         elif multimask_output and not self.samurai_mode:
             # take the best mask prediction (with the highest IoU estimation)
             best_iou_inds = torch.argmax(ious, dim=-1)
@@ -666,8 +666,8 @@ class SAM2Base(torch.nn.Module):
                         obj_score = output_dict["non_cond_frame_outputs"][i]["object_score_logits"]  # Get object score
                         kf_score = output_dict["non_cond_frame_outputs"][i]["kf_score"] if "kf_score" in output_dict["non_cond_frame_outputs"][i] else None  # Get motion score if available
                         # Check if the scores meet the criteria for being a valid index
-                        if iou_score.item() > self.memory_bank_iou_threshold and \
-                           obj_score.item() > self.memory_bank_obj_score_threshold and \
+                        if iou_score.mean().item() > self.memory_bank_iou_threshold and \
+                           obj_score.mean().item() > self.memory_bank_obj_score_threshold and \
                            (kf_score is None or kf_score.item() > self.memory_bank_kf_score_threshold):
                             valid_indices.insert(0, i)  
                         # Check the number of valid indices

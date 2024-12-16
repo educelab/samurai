@@ -8,14 +8,31 @@ import gc
 import sys
 sys.path.append("./sam2")
 from sam2.build_sam import build_sam2_video_predictor
+from pathlib import Path
+import imageio.v3 as iio
 
-color = [(255, 0, 0)]
+color = [
+    (128, 0, 0),
+    (128, 128, 0),
+    (128, 0, 128),
+    (0, 128, 128),
+    (64, 0, 0),
+    (64, 128, 0),
+    (64, 0, 128),
+    (0, 64, 128),
+    (128, 64, 0),
+    (128, 0, 64),
+    (0, 128, 64),
+]
 
 def load_txt(gt_path):
     with open(gt_path, 'r') as f:
         gt = f.readlines()
     prompts = {}
     for fid, line in enumerate(gt):
+        line = line.strip()
+        if len(line) == 0:
+            continue
         x, y, w, h = map(float, line.split(','))
         x, y, w, h = int(x), int(y), int(w), int(h)
         prompts[fid] = ((x, y, x + w, y + h), 0)
@@ -40,8 +57,10 @@ def prepare_frames_or_path(video_path):
         raise ValueError("Invalid video_path format. Should be .mp4 or a directory of jpg frames.")
 
 def main(args):
+    device = args.device
+    device_type = device.partition(':')[0]
     model_cfg = determine_model_cfg(args.model_path)
-    predictor = build_sam2_video_predictor(model_cfg, args.model_path, device="cuda:0")
+    predictor = build_sam2_video_predictor(model_cfg, args.model_path, device=device)
     frames_or_path = prepare_frames_or_path(args.video_path)
     prompts = load_txt(args.txt_path)
 
@@ -67,10 +86,16 @@ def main(args):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(args.video_output_path, fourcc, 30, (width, height))
 
-    with torch.inference_mode(), torch.autocast("cuda", dtype=torch.float16):
+    mask_dir = args.mask_dir
+    if args.mask_dir is not None:
+        mask_dir = Path(mask_dir)
+        mask_dir.mkdir(exist_ok=True, parents=True)
+    with torch.inference_mode(), torch.autocast('cuda', dtype=torch.float16):
         state = predictor.init_state(frames_or_path, offload_video_to_cpu=True)
-        bbox, track_label = prompts[0]
-        _, _, masks = predictor.add_new_points_or_box(state, box=bbox, frame_idx=0, obj_id=0)
+        all_masks = []
+        for idx, (bbox, track_label) in enumerate(prompts.values()):
+            _, _, masks = predictor.add_new_points_or_box(state, box=bbox, frame_idx=0, obj_id=idx)
+            all_masks.append(masks)
 
         for frame_idx, object_ids, masks in predictor.propagate_in_video(state):
             mask_to_vis = {}
@@ -88,12 +113,15 @@ def main(args):
                     bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
                 bbox_to_vis[obj_id] = bbox
                 mask_to_vis[obj_id] = mask
+                if mask_dir is not None:
+                    mask_path = mask_dir / f'OBJ{obj_id:02}_{frame_idx:04}.png'
+                    iio.imwrite(mask_path, mask.astype(np.uint8) * 255)
 
             if args.save_to_video:
                 img = loaded_frames[frame_idx]
                 for obj_id, mask in mask_to_vis.items():
                     mask_img = np.zeros((height, width, 3), np.uint8)
-                    mask_img[mask] = color[(obj_id + 1) % len(color)]
+                    mask_img[mask] = color[obj_id % len(color)]
                     img = cv2.addWeighted(img, 1, mask_img, 0.2, 0)
 
                 for obj_id, bbox in bbox_to_vis.items():
@@ -116,5 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", default="sam2/checkpoints/sam2.1_hiera_base_plus.pt", help="Path to the model checkpoint.")
     parser.add_argument("--video_output_path", default="demo.mp4", help="Path to save the output video.")
     parser.add_argument("--save_to_video", default=True, help="Save results to a video.")
+    parser.add_argument("--mask_dir", help="If provided, save mask images to the given directory")
+    parser.add_argument("--device", default="cuda:0")
     args = parser.parse_args()
     main(args)
